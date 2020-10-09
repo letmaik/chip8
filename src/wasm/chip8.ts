@@ -45,7 +45,7 @@ type InsFn = (i: Ins) => boolean
 
 export class CPU {
     constructor(private memory: Memory, private display: Display, private keyboard: Keyboard) {
-        keyboard.registerKeyDownListener(key => this.onKeyDown(key))
+        keyboard.registerKeyDownListener(key => { this.onKeyDown(key) })
     }
 
     waitForKey: bool = false
