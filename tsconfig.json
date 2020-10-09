@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "module": "ESNext",
+    "moduleResolution": "node"
+  },
+  "include": [
+    "src/host/**/*.ts",
+    "src/test/**/*.ts"
+  ]
+}
