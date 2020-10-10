@@ -1,10 +1,10 @@
-import { AsBind } from "as-bind";
+import { AsBind } from "as-bind"
 
 const run = async () => {
     const imports = {
     };
 
-    const module = await AsBind.instantiateStreaming(
+    const module = await AsBind.instantiate(
         fetch("/build/untouched.wasm"), imports
     );
     const exports = module.exports;
@@ -20,7 +20,7 @@ const run = async () => {
 
     // TODO map keys and forward key presses
 
-    exports.createChip8(rom)
+    exports.createChip8(new Uint8Array(rom))
     function step() {
         const raster: Uint8Array = exports.getChip8DisplayRaster()
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)

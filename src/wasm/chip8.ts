@@ -2,23 +2,31 @@ class Memory {
     ram: Uint8Array = new Uint8Array(4096)
 }
 
+// AssemblyScript doesn't support interfaces or closures yet.
+// https://github.com/AssemblyScript/assemblyscript/issues/1438#issuecomment-706547580
+abstract class KeyboardListener {
+    abstract onKeyDown(key: u8): void
+}
+
 class Keyboard {
     keys: u16 // 16 keys, 0 = up, 1 = down
 
-    onKeyDownListeners: Array<(key: u8) => void>
+    listeners: Array<KeyboardListener> = []
 
-    registerKeyDownListener(fn: (key: u8) => void): void {
-        this.onKeyDownListeners.push(fn)
+    registerListener(listener: KeyboardListener): void {
+        this.listeners.push(listener)
     }
 
     isDown(key: u8): bool {
-        return this.keys & 1 << key
+        return (this.keys & 1 << key) as bool
     }
 
     setDown(key: u8, down: bool): void {
         if (down) {
             this.keys |= 1 << key
-            this.onKeyDownListeners.forEach(fn => fn(key))
+            for (let i = 0; i < this.listeners.length; i++) {
+                this.listeners[i].onKeyDown(key)
+            }
         } else {
             this.keys &= ~(1 << key)
         }
@@ -43,9 +51,10 @@ class Display {
 type Ins = u16
 type InsFn = (i: Ins) => boolean
 
-export class CPU {
+export class CPU extends KeyboardListener {
     constructor(private memory: Memory, private display: Display, private keyboard: Keyboard) {
-        keyboard.registerKeyDownListener(key => { this.onKeyDown(key) })
+        super()
+        keyboard.registerListener(this)
     }
 
     waitForKey: bool = false
@@ -225,19 +234,19 @@ export class CPU {
             const offsetX = this.V[x]
             const offsetY = this.V[y]
             const sprite = this.memory.ram.subarray(this.I, this.I + n)
-            const spriteWidth = 8
-            const spriteHeight = n * 8
+            const spriteWidth: u8 = 8
+            const spriteHeight: u8 = n * 8
             let erased: u8 = 0
-            for (let spriteY = 0; spriteY < spriteHeight; spriteY++) {
-                const displayY = (offsetY + spriteY) % Display.height
-                for (let spriteX = 0; spriteX < spriteWidth; spriteX++) {
-                    const displayX = (offsetX + spriteX) % Display.width
+            for (let spriteY: u8 = 0; spriteY < spriteHeight; spriteY++) {
+                const displayY: u8 = (offsetY + spriteY) % Display.height
+                for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
+                    const displayX: u8 = (offsetX + spriteX) % Display.width
                     const oldVal = this.display.get(displayX, displayY)
                     const newVal = oldVal ^ ((sprite[spriteY/8] >> spriteX) & (0x8000 >> spriteX) )
                     if (oldVal && !newVal) {
                         erased = 1
                     }
-                    this.display.set(displayX, displayY, newVal)
+                    this.display.set(displayX, displayY, newVal as bool)
                 }
             }
             this.V[CPU.VF] = erased
@@ -270,7 +279,7 @@ export class CPU {
         } else if (CPU.LD_F_V(ins)) {
             const x = getX(ins)
             const fontSpriteSize = 5
-            this.I = this.V[x] * fontSpriteSize
+            this.I = this.V[x] * fontSpriteSize as u16
         } else if (CPU.LD_B_V(ins)) {
             const x = getX(ins)
             const hundredDigit: u8 = this.V[x] / 100
@@ -283,12 +292,12 @@ export class CPU {
             this.memory.ram[this.I + 2] = onesDigit
         } else if (CPU.LD_I_V(ins)) {
             const x = getX(ins)
-            for (let i = 0; i <= x; i++) {
+            for (let i: u8 = 0; i <= x; i++) {
                 this.memory.ram[this.I + i] = this.V[i]
             }
         } else if (CPU.LD_V_I(ins)) {
             const x = getX(ins)
-            for (let i = 0; i <= x; i++) {
+            for (let i: u8 = 0; i <= x; i++) {
                 this.V[i] = this.memory.ram[this.I + i]
             }
         } else {
@@ -302,7 +311,7 @@ export class CPU {
 }
 
 function getRandomByte(): u8 {
-    const r: u8 = Math.random()
+    const r = Math.random() as u8
     return r
 }
 
@@ -315,26 +324,26 @@ function getNNN(ins: Ins): u16 {
 
 // lowest 4 bits of the instruction
 function getN(ins: Ins): u8 {
-    return ins & 0x000F
+    return (ins & 0x000F) as u8
 }
 
 // lower 4 bits of the high byte of the instruction
 function getX(ins: Ins): u8 {
-    return (ins & 0x0F00) >> 8 as u8
+    return ((ins & 0x0F00) >> 8) as u8
 }
 
 // upper 4 bits of the low byte of the instruction
 function getY(ins: Ins): u8 {
-    return (ins & 0x00F0) >> 4
+    return ((ins & 0x00F0) >> 4) as u8
 }
 
 // lowest 8 bits of the instruction
 function getKK(ins: Ins): u8 {
-    return ins & 0x00FF
+    return (ins & 0x00FF) as u8
 }
 
 function uint8sToUint16(a: u8, b: u8): u16 {
-    return a << 8 | b
+    return (a as u16) << 8 | b
 }
 
 const HexFontSprites = [
@@ -372,11 +381,10 @@ export class Chip8 {
         }
     }
 
-    loadProgram(program: ArrayBuffer): void {
+    loadProgram(program: Uint8Array): void {
         const programStartAddr: u16 = 0x200
-        const vals = Uint8Array.wrap(program)
         for (let i = 0; i < HexFontSprites.length; i++) {
-            this.memory.ram[programStartAddr + i] = vals[i]
+            this.memory.ram[programStartAddr + i] = program[i]
         }
         this.cpu.PC = programStartAddr
     }

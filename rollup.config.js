@@ -10,7 +10,7 @@ export default {
   },
   plugins: [
     nodeResolve(),
-    typescript({tsconfig: 'src/host/tsconfig.json'}),
+    typescript(),
     commonjs(),
   ]
 };
