@@ -303,6 +303,7 @@ export class CPU extends KeyboardListener {
         } else {
             abort('unknown instruction')
         }
+        this.PC += 2
     }
 
     isSoundOn(): boolean {
