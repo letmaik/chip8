@@ -48,17 +48,240 @@ class Display {
     }
 }
 
-type Ins = u16
-type InsFn = (i: Ins) => boolean
+class Instruction {
+    constructor(public ins: u16) {}
+
+    // Parameter masks, named after http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
+    static nnnMask: u16 = 0x0FFF
+    static nMask: u16   = 0x000F
+    static xMask: u16   = 0x0F00
+    static yMask: u16   = 0x00F0
+    static kkMask: u16  = 0x00FF
+
+    // lowest 12 bits of the instruction
+    get nnn(): u16 {
+        return this.ins & Instruction.nnnMask
+    }
+
+    // lowest 4 bits of the instruction
+    get n(): u8 {
+        return (this.ins & Instruction.nMask) as u8
+    }
+
+    // lower 4 bits of the high byte of the instruction
+    get x(): u8 {
+        return ((this.ins & Instruction.xMask) >> 8) as u8
+    }
+
+    // upper 4 bits of the low byte of the instruction
+    get y(): u8 {
+        return ((this.ins & Instruction.yMask) >> 4) as u8
+    }
+
+    // lowest 8 bits of the instruction
+    get kk(): u8 {
+        return (this.ins & Instruction.kkMask) as u8
+    }
+}
+
+class InstructionType {
+    constructor(public name: string, public mask: u16, public match: u16,
+                public execute: (ins: Instruction, cpu: CPU) => void) {}
+
+    hasParam(paramMask: u16): boolean {
+        return (~this.mask & paramMask) == paramMask ? true : false
+    }
+
+    matches(instruction: Instruction): boolean {
+        return (instruction.ins & this.mask) == this.match
+    }
+}
+
+// Instruction type masks based on parameterisation.
+const noParams: u16 = ~0x0000
+const nnnOnly: u16 = ~Instruction.nnnMask
+const xOnly: u16 = ~Instruction.xMask
+const xyOnly: u16 = ~(Instruction.xMask | Instruction.yMask)
+const xkkOnly: u16 = ~(Instruction.xMask | Instruction.kkMask)
+const xynOnly: u16 = ~(Instruction.xMask | Instruction.yMask | Instruction.nMask)
+// Note: nnnOnly, xkkOnly, xynOnly are identical but they are kept for documentation purposes.
+assert(nnnOnly == xkkOnly && nnnOnly == xynOnly)
+
+const instructionTypes = [
+    new InstructionType("CLS", noParams, 0x00E0, (ins, cpu) => {
+        cpu.display.raster.fill(0)
+    }),
+    new InstructionType("RET", noParams, 0x00EE, (ins, cpu) => {
+        cpu.PC = cpu.stack[0]
+        cpu.SP -= 1
+    }),
+    new InstructionType("JP_ADDR", nnnOnly, 0x1000, (ins, cpu) => {
+        cpu.PC = ins.nnn
+    }),
+    new InstructionType("CALL_ADDR", nnnOnly, 0x2000, (ins, cpu) => {
+        cpu.SP += 1
+        cpu.stack[cpu.SP] = cpu.PC
+        cpu.PC = ins.nnn
+    }),
+    new InstructionType("SE_V_BYTE", xkkOnly, 0x3000, (ins, cpu) => {
+        if (cpu.V[ins.x] == ins.kk) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("SNE_V_BYTE", xkkOnly, 0x4000, (ins, cpu) => {
+        if (cpu.V[ins.x] != ins.kk) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("SE_V_V", xyOnly, 0x5000, (ins, cpu) => {
+        if (cpu.V[ins.x] == cpu.V[ins.y]) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("LD_V_BYTE", xkkOnly, 0x6000, (ins, cpu) => {
+        cpu.V[ins.x] = ins.kk
+    }),
+    new InstructionType("ADD_V_BYTE", xkkOnly, 0x7000, (ins, cpu) => {
+        cpu.V[ins.x] += ins.kk
+    }),
+    new InstructionType("LD_V_V", xyOnly, 0x8000, (ins, cpu) => {
+        cpu.V[ins.x] = cpu.V[ins.y]
+    }),
+    new InstructionType("OR_V_V", xyOnly, 0x8001, (ins, cpu) => {
+        cpu.V[ins.x] |= cpu.V[ins.y]
+    }),
+    new InstructionType("AND_V_V", xyOnly, 0x8002, (ins, cpu) => {
+        cpu.V[ins.x] &= cpu.V[ins.y]
+    }),
+    new InstructionType("XOR_V_V", xyOnly, 0x8003, (ins, cpu) => {
+        cpu.V[ins.x] ^= cpu.V[ins.y]
+    }),
+    new InstructionType("ADD_V_V", xyOnly, 0x8004, (ins, cpu) => {
+        let tmp: u16 = cpu.V[ins.x]
+        tmp += cpu.V[ins.y]
+        cpu.V[CPU.VF] = tmp & 0xFFFF0000 ? 1 : 0
+        cpu.V[ins.x] = tmp & 0xFFFF
+    }),
+    new InstructionType("SUB_V_V", xyOnly, 0x8005, (ins, cpu) => {
+        cpu.V[CPU.VF] = cpu.V[ins.x] > cpu.V[ins.y] ? 1 : 0
+        cpu.V[ins.x] -= cpu.V[ins.y]
+    }),
+    new InstructionType("SHR_V", xOnly, 0x8006, (ins, cpu) => {
+        cpu.V[CPU.VF] = cpu.V[ins.x] & 0x0001
+        cpu.V[ins.x] >>= 1
+    }),
+    new InstructionType("SUBN_V_V", xyOnly, 0x8007, (ins, cpu) => {
+        cpu.V[CPU.VF] = cpu.V[ins.y] > cpu.V[ins.x] ? 1 : 0
+        cpu.V[ins.x] = cpu.V[ins.y] - cpu.V[ins.x]
+    }),
+    new InstructionType("SHL_V", xOnly, 0x800E, (ins, cpu) => {
+        cpu.V[CPU.VF] = cpu.V[ins.x] >> 7
+            cpu.V[ins.x] <<= 1
+    }),
+    new InstructionType("SNE_V_V", xyOnly, 0x9000, (ins, cpu) => {
+        if (cpu.V[ins.x] != cpu.V[ins.y]) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("LD_I_ADDR", nnnOnly, 0xA000, (ins, cpu) => {
+        cpu.I = ins.nnn
+    }),
+    new InstructionType("JP_V0_ADDR", nnnOnly, 0xB000, (ins, cpu) => {
+        cpu.PC = ins.nnn + cpu.V[0]
+    }),
+    new InstructionType("RND_V_BYTE", xkkOnly, 0xC000, (ins, cpu) => {
+        cpu.V[ins.x] = (Math.random() as u8) & ins.kk
+    }),
+    new InstructionType("DRW_V_V", xynOnly, 0xD000, (ins, cpu) => {
+        const offsetX = cpu.V[ins.x]
+        const offsetY = cpu.V[ins.y]
+        const sprite = cpu.memory.ram.subarray(cpu.I, cpu.I + ins.n)
+        const spriteWidth: u8 = 8
+        const spriteHeight: u8 = ins.n * 8
+        let erased: u8 = 0
+        for (let spriteY: u8 = 0; spriteY < spriteHeight; spriteY++) {
+            const displayY: u8 = (offsetY + spriteY) % Display.height
+            for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
+                const displayX: u8 = (offsetX + spriteX) % Display.width
+                const oldVal = cpu.display.get(displayX, displayY)
+                const newVal = oldVal ^ ((sprite[spriteY/8] >> spriteX) & (0x8000 >> spriteX) )
+                if (oldVal && !newVal) {
+                    erased = 1
+                }
+                cpu.display.set(displayX, displayY, newVal as bool)
+            }
+        }
+        cpu.V[CPU.VF] = erased
+    }),
+    new InstructionType("SKP_V", xOnly, 0xE09E, (ins, cpu) => {
+        if (cpu.keyboard.isDown(cpu.V[ins.x])) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("SKNP_V", xOnly, 0xE0A1, (ins, cpu) => {
+        if (!cpu.keyboard.isDown(cpu.V[ins.x])) {
+            cpu.PC += 2
+        }
+    }),
+    new InstructionType("LD_V_DT", xOnly, 0xF007, (ins, cpu) => {
+        cpu.V[ins.x] = cpu.DT
+    }),
+    new InstructionType("LD_V_K", xOnly, 0xF00A, (ins, cpu) => {
+        cpu.waitForKey = true
+        cpu.waitForKeyVx = ins.x
+        // see onKeyDown() for rest of this instruction
+    }),
+    new InstructionType("LD_DT_V", xOnly, 0xF015, (ins, cpu) => {
+        cpu.DT = cpu.V[ins.x]
+    }),
+    new InstructionType("LD_ST_V", xOnly, 0xF018, (ins, cpu) => {
+        cpu.ST = cpu.V[ins.x]
+    }),
+    new InstructionType("ADD_I_V", xOnly, 0xF01E, (ins, cpu) => {
+        cpu.I += cpu.V[ins.x]
+    }),
+    new InstructionType("LD_F_V", xOnly, 0xF029, (ins, cpu) => {
+        const fontSpriteSize = 5
+            cpu.I = cpu.V[ins.x] * fontSpriteSize as u16
+    }),
+    new InstructionType("LD_B_V", xOnly, 0xF033, (ins, cpu) => {
+        const hundredDigit: u8 = cpu.V[ins.x] / 100
+        const hundreds: u8 = hundredDigit * 100
+        const tensDigit: u8 = (cpu.V[ins.x] - hundreds) / 10
+        const tens: u8 = tensDigit * 10
+        const onesDigit: u8 = cpu.V[ins.x] - hundreds - tens
+        cpu.memory.ram[cpu.I] = hundredDigit
+        cpu.memory.ram[cpu.I + 1] = tensDigit
+        cpu.memory.ram[cpu.I + 2] = onesDigit
+    }),
+    new InstructionType("LD_I_V", xOnly, 0xF055, (ins, cpu) => {
+        for (let i: u8 = 0; i <= ins.x; i++) {
+            cpu.memory.ram[cpu.I + i] = cpu.V[i]
+        }
+    }),
+    new InstructionType("LD_V_I", xOnly, 0xF065, (ins, cpu) => {
+        for (let i: u8 = 0; i <= ins.x; i++) {
+            cpu.V[i] = cpu.memory.ram[cpu.I + i]
+        }
+    })
+]
+
+function getInstructionType(ins: Instruction): InstructionType {
+    for (let i = 0; i < instructionTypes.length; i++) {
+        if (instructionTypes[i].matches(ins)) {
+            return instructionTypes[i]
+        }
+    }
+    abort(`unknown instruction type: ${ins.ins.toString(16)}`)
+    throw new Error()
+}
+
 
 export class CPU extends KeyboardListener {
-    constructor(private memory: Memory, private display: Display, private keyboard: Keyboard) {
+    constructor(public memory: Memory, public display: Display, public keyboard: Keyboard) {
         super()
         keyboard.registerListener(this)
     }
-
-    waitForKey: bool = false
-    waitForKeyVx: u8
 
     // Registers
     V: Uint8Array = new Uint8Array(16) // general purpose
@@ -71,280 +294,44 @@ export class CPU extends KeyboardListener {
 
     static VF: u8 = 15
 
-    // Instructions
-    static CLS        : InsFn = (i: Ins) => i == 0x00E0
-    static RET        : InsFn = (i: Ins) => i == 0x00EE
-    static SYS        : InsFn = (i: Ins) => (i & 0xF000) == 0x0000 && i !== 0x00E0 && i !== 0x00EE
-    static JP_ADDR    : InsFn = (i: Ins) => (i & 0xF000) == 0x1000
-    static CALL_ADDR  : InsFn = (i: Ins) => (i & 0xF000) == 0x2000
-    static SE_V_BYTE  : InsFn = (i: Ins) => (i & 0xF000) == 0x3000
-    static SNE_V_BYTE : InsFn = (i: Ins) => (i & 0xF000) == 0x4000
-    static SE_V_V     : InsFn = (i: Ins) => (i & 0xF000) == 0x5000
-    static LD_V_BYTE  : InsFn = (i: Ins) => (i & 0xF000) == 0x6000
-    static ADD_V_BYTE : InsFn = (i: Ins) => (i & 0xF000) == 0x7000
-    static LD_V_V     : InsFn = (i: Ins) => (i & 0xF00F) == 0x8000
-    static OR_V_V     : InsFn = (i: Ins) => (i & 0xF00F) == 0x8001
-    static AND_V_V    : InsFn = (i: Ins) => (i & 0xF00F) == 0x8002
-    static XOR_V_V    : InsFn = (i: Ins) => (i & 0xF00F) == 0x8003
-    static ADD_V_V    : InsFn = (i: Ins) => (i & 0xF00F) == 0x8004
-    static SUB_V_V    : InsFn = (i: Ins) => (i & 0xF00F) == 0x8005
-    static SHR_V      : InsFn = (i: Ins) => (i & 0xF00F) == 0x8006
-    static SUBN_V_V   : InsFn = (i: Ins) => (i & 0xF00F) == 0x8007
-    static SHL_V      : InsFn = (i: Ins) => (i & 0xF00F) == 0x800E
-    static SNE_V_V    : InsFn = (i: Ins) => (i & 0xF00F) == 0x9000
-    static LD_I_ADDR  : InsFn = (i: Ins) => (i & 0xF000) == 0xA000
-    static JP_V0_ADDR : InsFn = (i: Ins) => (i & 0xF000) == 0xB000
-    static RND_V_BYTE : InsFn = (i: Ins) => (i & 0xF000) == 0xC000
-    static DRW_V_V    : InsFn = (i: Ins) => (i & 0xF000) == 0xD000
-    static SKP_V      : InsFn = (i: Ins) => (i & 0xF0FF) == 0xE09E
-    static SKNP_V     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xE0A1
-    static LD_V_DT    : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF007
-    static LD_V_K     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF00A
-    static LD_DT_V    : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF015
-    static LD_ST_V    : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF018
-    static ADD_I_V    : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF01E
-    static LD_F_V     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF029
-    static LD_B_V     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF033
-    static LD_I_V     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF055
-    static LD_V_I     : InsFn = (i: Ins) => (i & 0xF0FF) == 0xF065
+    // Special support for LD_V_K instruction
+    waitForKey: bool = false
+    waitForKeyVx: u8
 
     onKeyDown(key: u8): void {
         if (this.waitForKey) {
             this.waitForKey = false
+            // rest of the LD_V_K instruction
             this.V[this.waitForKeyVx] = key
         }
+    }
+
+    get currentInstruction(): Instruction {
+        const ins = (this.memory.ram[this.PC] as u16) << 8 | this.memory.ram[this.PC+1]
+        return new Instruction(ins)
     }
 
     step(): void {
         if (this.waitForKey) {
             return
         }
-        const ram = this.memory.ram
-        const ins = uint8sToUint16(ram[this.PC], ram[this.PC+1])
-
         if (this.DT > 0) {
             this.DT--
         }
         if (this.ST > 0) {
             this.ST--
         }
-        
-        if (CPU.SYS(ins)) {
-            trace('SYS instruction ignored')
-        } else if (CPU.CLS(ins)) {
-            this.display.raster.fill(0)
-        } else if (CPU.RET(ins)) {
-            this.PC = this.stack[0]
-            this.SP -= 1
-        } else if (CPU.JP_ADDR(ins)) {
-            const addr = getNNN(ins)
-            this.PC = addr
-        } else if (CPU.CALL_ADDR(ins)) {
-            const addr = getNNN(ins)
-            this.SP += 1
-            this.stack[this.SP] = this.PC
-            this.PC = addr
-        } else if (CPU.SE_V_BYTE(ins)) {
-            const x = getX(ins)
-            const byte = getKK(ins)
-            if (this.V[x] == byte) {
-                this.PC += 2
-            }
-        } else if (CPU.SNE_V_BYTE(ins)) {
-            const x = getX(ins)
-            const byte = getKK(ins)
-            if (this.V[x] != byte) {
-                this.PC += 2
-            }
-        } else if (CPU.SE_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            if (this.V[x] == this.V[y]) {
-                this.PC += 2
-            }
-        } else if (CPU.LD_V_BYTE(ins)) {
-            const x = getX(ins)
-            const byte = getKK(ins)
-            this.V[x] = byte
-        } else if (CPU.ADD_V_BYTE(ins)) {
-            const x = getX(ins)
-            const byte = getKK(ins)
-            this.V[x] += byte
-        } else if (CPU.LD_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[x] = this.V[y]
-        } else if (CPU.OR_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[x] |= this.V[y]
-        } else if (CPU.AND_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[x] &= this.V[y]
-        } else if (CPU.XOR_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[x] ^= this.V[y]
-        } else if (CPU.ADD_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            let tmp: u16 = this.V[x]
-            tmp += this.V[y]
-            this.V[CPU.VF] = tmp & 0xFFFF0000 ? 1 : 0
-            this.V[x] = tmp & 0xFFFF
-        } else if (CPU.SUB_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[CPU.VF] = this.V[x] > this.V[y] ? 1 : 0
-            this.V[x] -= this.V[y]
-        } else if (CPU.SHR_V(ins)) {
-            const x = getX(ins)
-            this.V[CPU.VF] = this.V[x] & 0x0001
-            this.V[x] >>= 1
-        } else if (CPU.SUBN_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            this.V[CPU.VF] = this.V[y] > this.V[x] ? 1 : 0
-            this.V[x] = this.V[y] - this.V[x]
-        } else if (CPU.SHL_V(ins)) {
-            const x = getX(ins)
-            this.V[CPU.VF] = this.V[x] >> 7
-            this.V[x] <<= 1
-        } else if (CPU.SNE_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            if (this.V[x] != this.V[y]) {
-                this.PC += 2
-            }
-        } else if (CPU.LD_I_ADDR(ins)) {
-            const addr = getNNN(ins)
-            this.I = addr
-        } else if (CPU.JP_V0_ADDR(ins)) {
-            const addr = getNNN(ins)
-            this.PC = addr + this.V[0]
-        } else if (CPU.RND_V_BYTE(ins)) {
-            const x = getX(ins)
-            const byte = getKK(ins)
-            this.V[x] = getRandomByte() & byte
-        } else if (CPU.DRW_V_V(ins)) {
-            const x = getX(ins)
-            const y = getY(ins)
-            const n = getN(ins)
-            const offsetX = this.V[x]
-            const offsetY = this.V[y]
-            const sprite = this.memory.ram.subarray(this.I, this.I + n)
-            const spriteWidth: u8 = 8
-            const spriteHeight: u8 = n * 8
-            let erased: u8 = 0
-            for (let spriteY: u8 = 0; spriteY < spriteHeight; spriteY++) {
-                const displayY: u8 = (offsetY + spriteY) % Display.height
-                for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
-                    const displayX: u8 = (offsetX + spriteX) % Display.width
-                    const oldVal = this.display.get(displayX, displayY)
-                    const newVal = oldVal ^ ((sprite[spriteY/8] >> spriteX) & (0x8000 >> spriteX) )
-                    if (oldVal && !newVal) {
-                        erased = 1
-                    }
-                    this.display.set(displayX, displayY, newVal as bool)
-                }
-            }
-            this.V[CPU.VF] = erased
-        } else if (CPU.SKP_V(ins)) {
-            const x = getX(ins)
-            if (this.keyboard.isDown(this.V[x])) {
-                this.PC += 2
-            }
-        } else if (CPU.SKNP_V(ins)) {
-            const x = getX(ins)
-            if (!this.keyboard.isDown(this.V[x])) {
-                this.PC += 2
-            }
-        } else if (CPU.LD_V_DT(ins)) {
-            const x = getX(ins)
-            this.V[x] = this.DT
-        } else if (CPU.LD_V_K(ins)) {
-            const x = getX(ins)
-            this.waitForKey = true
-            this.waitForKeyVx = x
-        } else if (CPU.LD_DT_V(ins)) {
-            const x = getX(ins)
-            this.DT = this.V[x]
-        } else if (CPU.LD_ST_V(ins)) {
-            const x = getX(ins)
-            this.ST = this.V[x]
-        } else if (CPU.ADD_I_V(ins)) {
-            const x = getX(ins)
-            this.I += this.V[x]
-        } else if (CPU.LD_F_V(ins)) {
-            const x = getX(ins)
-            const fontSpriteSize = 5
-            this.I = this.V[x] * fontSpriteSize as u16
-        } else if (CPU.LD_B_V(ins)) {
-            const x = getX(ins)
-            const hundredDigit: u8 = this.V[x] / 100
-            const hundreds: u8 = hundredDigit * 100
-            const tensDigit: u8 = (this.V[x] - hundreds) / 10
-            const tens: u8 = tensDigit * 10
-            const onesDigit: u8 = this.V[x] - hundreds - tens
-            this.memory.ram[this.I] = hundredDigit
-            this.memory.ram[this.I + 1] = tensDigit
-            this.memory.ram[this.I + 2] = onesDigit
-        } else if (CPU.LD_I_V(ins)) {
-            const x = getX(ins)
-            for (let i: u8 = 0; i <= x; i++) {
-                this.memory.ram[this.I + i] = this.V[i]
-            }
-        } else if (CPU.LD_V_I(ins)) {
-            const x = getX(ins)
-            for (let i: u8 = 0; i <= x; i++) {
-                this.V[i] = this.memory.ram[this.I + i]
-            }
-        } else {
-            abort('unknown instruction')
-        }
+
+        const ins = this.currentInstruction
+        const insType = getInstructionType(ins)
+        insType.execute(ins, this)
+
         this.PC += 2
     }
 
-    isSoundOn(): boolean {
+    get isSoundOn(): boolean {
         return this.ST > 0
     }
-}
-
-function getRandomByte(): u8 {
-    const r = Math.random() as u8
-    return r
-}
-
-// Extractor functions, named after http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
-
-// lowest 12 bits of the instruction
-function getNNN(ins: Ins): u16 {
-    return ins & 0x0FFF
-}
-
-// lowest 4 bits of the instruction
-function getN(ins: Ins): u8 {
-    return (ins & 0x000F) as u8
-}
-
-// lower 4 bits of the high byte of the instruction
-function getX(ins: Ins): u8 {
-    return ((ins & 0x0F00) >> 8) as u8
-}
-
-// upper 4 bits of the low byte of the instruction
-function getY(ins: Ins): u8 {
-    return ((ins & 0x00F0) >> 4) as u8
-}
-
-// lowest 8 bits of the instruction
-function getKK(ins: Ins): u8 {
-    return (ins & 0x00FF) as u8
-}
-
-function uint8sToUint16(a: u8, b: u8): u16 {
-    return (a as u16) << 8 | b
 }
 
 const HexFontSprites = [

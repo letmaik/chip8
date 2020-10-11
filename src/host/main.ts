@@ -25,7 +25,8 @@ const run = async () => {
 
     // TODO map keys and forward key presses
 
-    exports.createChip8(new Uint8Array(rom))
+    exports.createChip8()
+    exports.loadChip8Program(new Uint8Array(rom))
     function step() {
         const raster: Uint8Array = exports.getChip8DisplayRaster().value
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
