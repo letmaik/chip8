@@ -34,21 +34,21 @@ class Keyboard {
 }
 
 class Display {
-    static width: u8 = 64
-    static height: u8 = 32
+    static readonly width: u8 = 64
+    static readonly height: u8 = 32
 
-    raster: Uint8Array = new Uint8Array(Display.width * Display.height) // 0 = black, 1 = white
+    raster: Uint8Array = new Uint8Array((Display.width as u16) * Display.height) // 0 = black, 1 = white
 
     get(x: u8, y: u8): u8 {
-        return this.raster[y * Display.width + x]
+        return this.raster[(Display.width as u16) * y + x]
     }
 
     set(x: u8, y: u8, v: bool): void {
-        this.raster[y * Display.width + x] = v ? 1 : 0
+        this.raster[(Display.width as u16) * y + x] = v ? 1 : 0
     }
 }
 
-class Instruction {
+export class Instruction {
     constructor(public ins: u16) {}
 
     // Parameter masks, named after http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
@@ -84,12 +84,13 @@ class Instruction {
     }
 }
 
-class InstructionType {
+export class InstructionType {
     constructor(public name: string, public mask: u16, public match: u16,
                 public execute: (ins: Instruction, cpu: CPU) => void) {}
 
     hasParam(paramMask: u16): boolean {
-        return (~this.mask & paramMask) == paramMask ? true : false
+        // FIXME this is wrong
+        return (~this.mask & paramMask) == ~this.mask ? true : false
     }
 
     matches(instruction: Instruction): boolean {
@@ -266,7 +267,7 @@ const instructionTypes = [
     })
 ]
 
-function getInstructionType(ins: Instruction): InstructionType {
+export function getInstructionType(ins: Instruction): InstructionType {
     for (let i = 0; i < instructionTypes.length; i++) {
         if (instructionTypes[i].matches(ins)) {
             return instructionTypes[i]
