@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@assemblyscript/loader": "^0.14.12",
-    "as-bind": "^0.4.0"
+    "as-bind": "^0.4.1"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^14.0.0",

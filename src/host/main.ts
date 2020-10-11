@@ -7,6 +7,11 @@ const run = async () => {
     const module = await AsBind.instantiate(
         fetch("/build/untouched.wasm"), imports
     );
+
+    // Enable returning typed array views without copy.
+    // All returned typed arrays then become {ptr: wasm_ptr, value: arr}.
+    module.enableExportFunctionUnsafeReturnValue()
+
     const exports = module.exports;
     
     const romResponse = await fetch("/assets/IBM Logo.ch8")
@@ -22,7 +27,7 @@ const run = async () => {
 
     exports.createChip8(new Uint8Array(rom))
     function step() {
-        const raster: Uint8Array = exports.getChip8DisplayRaster()
+        const raster: Uint8Array = exports.getChip8DisplayRaster().value
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
         const rgba = imgData.data
         for (let i = 0; i < raster.length; i++) {
