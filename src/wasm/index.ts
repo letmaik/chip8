@@ -1,6 +1,6 @@
 // Entry file of the WebAssembly module.
 
-import {Chip8, getInstructionType, Instruction} from './chip8'
+import {Chip8, getInstructionType, instructionTypes} from './chip8'
 
 // as-bind doesn't support returning custom classes yet.
 
@@ -75,6 +75,21 @@ export function getInstructionTypeName(): string {
   const ins = chip8.cpu.currentInstruction
   const insType = getInstructionType(ins)
   return insType.name
+}
+
+export function getInstructionTypes(): string {
+  let s: Array<string> = []
+  for (let i=0; i < instructionTypes.length; i++) {
+    const t = instructionTypes[i]
+    const sp: Array<string> = []
+    for (let i=0; i < t.params.length; i++) {
+      const param = t.params[i]
+      const utype: string = param.isU16 ? 'u16' : 'u8'
+      sp.push(param.name + '[' + utype + ';' + hex(param.mask) + ';' + param.shift.toString() + ']')
+    }
+    s.push(t.name + ' mask=' + hex(t.mask) + ' match=' + hex(t.match) + ' params=' + sp.join(', '))
+  }
+  return s.join('\n')
 }
 
 function hex<T extends number>(n: T): string {

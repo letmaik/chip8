@@ -52,7 +52,7 @@ class Parameter {
     shift: u8
     
     constructor(public name: string, public mask: u16) {
-        this.shift = (ctz(mask) / 8) as u8
+        this.shift = ctz(mask) as u8
     }
 
     get isU16(): boolean {
@@ -117,7 +117,7 @@ export class InstructionType {
     }
 }
 
-const instructionTypes = [
+export const instructionTypes = [
     new InstructionType("CLS", [], 0x00E0, (ins, cpu) => {
         cpu.display.raster.fill(0)
     }),

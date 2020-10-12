@@ -56,6 +56,8 @@ async function main() {
     const offColor = [0, 0, 0]
     const onColor = [255, 255, 255]
 
+    console.log(exports.getInstructionTypes())
+
     exports.init()
     exports.loadProgram(new Uint8Array(rom))
     function step() {
