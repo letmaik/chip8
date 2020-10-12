@@ -7,9 +7,14 @@
 https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference
 http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 
+### Unit tests
+
+https://github.com/SnoozeTime/chip8/blob/master/test/opcode_test.cc
+
 ### Roms
 
 https://github.com/dmatlack/chip8
+https://github.com/corax89/chip8-test-rom
 
 ## Development notes
 

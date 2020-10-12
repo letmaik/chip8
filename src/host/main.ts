@@ -47,7 +47,7 @@ async function main() {
     const exports = module.exports
     const unboundExports = module.unboundExports
     
-    const romResponse = await fetch("/assets/IBM Logo.ch8")
+    const romResponse = await fetch("/assets/test_opcode.ch8")
     const rom = await romResponse.arrayBuffer()
 
     const canvas = document.getElementById('display') as HTMLCanvasElement
@@ -80,6 +80,7 @@ async function main() {
         // u16 return values are buggy with as-bind, using direct access here.
         // https://github.com/torch2424/as-bind/issues/50
 
+        console.log('ram', exports.getRam().value)
         console.log('raster', raster)
         console.log('keys', bin(unboundExports.getKeys()))
         console.log('register V', exports.getVRegisters().value)

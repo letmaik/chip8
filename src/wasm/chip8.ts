@@ -252,7 +252,7 @@ export const instructionTypes = [
     }),
     new InstructionType("LD_F_V", [X], 0xF029, (ins, cpu) => {
         const fontSpriteSize = 5
-            cpu.I = cpu.V[ins.x] * fontSpriteSize as u16
+        cpu.I = cpu.V[ins.x] * fontSpriteSize as u16
     }),
     new InstructionType("LD_B_V", [X], 0xF033, (ins, cpu) => {
         const hundredDigit: u8 = cpu.V[ins.x] / 100
@@ -282,7 +282,7 @@ export function getInstructionType(ins: Instruction): InstructionType {
             return instructionTypes[i]
         }
     }
-    abort(`unknown instruction type: ${ins.ins.toString(16)}`)
+    abort('unknown instruction type: 0x' + ins.ins.toString(16))
     throw new Error()
 }
 
@@ -381,7 +381,7 @@ export class Chip8 {
 
     loadProgram(program: Uint8Array): void {
         const programStartAddr: u16 = 0x200
-        for (let i = 0; i < HexFontSprites.length; i++) {
+        for (let i = 0; i < program.length; i++) {
             this.memory.ram[programStartAddr + i] = program[i]
         }
         this.cpu.PC = programStartAddr
