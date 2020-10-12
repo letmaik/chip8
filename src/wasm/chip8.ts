@@ -48,49 +48,68 @@ class Display {
     }
 }
 
+class Parameter {
+    shift: u8
+    
+    constructor(public name: string, public mask: u16) {
+        this.shift = (ctz(mask) / 8) as u8
+    }
+
+    get isU16(): boolean {
+        return this.mask == 0x0FFF
+    }
+
+    getU8(ins: u16): u8 {
+        return ((ins & this.mask) >> this.shift) as u8
+    }
+
+    getU16(ins: u16): u16 {
+        return (ins & this.mask) >> this.shift
+    }
+}
+
+// Parameters, named after http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
+const NNN = new Parameter('nnn', 0x0FFF) // lowest 12 bits of the instruction
+const N   = new Parameter('n',   0x000F) // lowest 4 bits of the instruction
+const X   = new Parameter('x',   0x0F00) // lower 4 bits of the high byte of the instruction
+const Y   = new Parameter('y',   0x00F0) // upper 4 bits of the low byte of the instruction
+const KK  = new Parameter('kk',  0x00FF) // lowest 8 bits of the instruction
+
 export class Instruction {
     constructor(public ins: u16) {}
 
-    // Parameter masks, named after http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
-    static nnnMask: u16 = 0x0FFF
-    static nMask: u16   = 0x000F
-    static xMask: u16   = 0x0F00
-    static yMask: u16   = 0x00F0
-    static kkMask: u16  = 0x00FF
-
-    // lowest 12 bits of the instruction
+    // Convenience functions
     get nnn(): u16 {
-        return this.ins & Instruction.nnnMask
+        return NNN.getU16(this.ins)
     }
 
-    // lowest 4 bits of the instruction
     get n(): u8 {
-        return (this.ins & Instruction.nMask) as u8
+        return N.getU8(this.ins)
     }
 
-    // lower 4 bits of the high byte of the instruction
     get x(): u8 {
-        return ((this.ins & Instruction.xMask) >> 8) as u8
+        return X.getU8(this.ins)
     }
-
-    // upper 4 bits of the low byte of the instruction
+    
     get y(): u8 {
-        return ((this.ins & Instruction.yMask) >> 4) as u8
+        return Y.getU8(this.ins)
     }
 
-    // lowest 8 bits of the instruction
     get kk(): u8 {
-        return (this.ins & Instruction.kkMask) as u8
+        return KK.getU8(this.ins)
     }
 }
 
 export class InstructionType {
-    constructor(public name: string, public mask: u16, public match: u16,
-                public execute: (ins: Instruction, cpu: CPU) => void) {}
+    mask: u16
 
-    hasParam(paramMask: u16): boolean {
-        // FIXME this is wrong
-        return (~this.mask & paramMask) == ~this.mask ? true : false
+    constructor(public name: string, public params: Array<Parameter>, public match: u16,
+                public execute: (ins: Instruction, cpu: CPU) => void) {
+        this.mask = 0x0000
+        for (let i=0; i < params.length; i++) {
+            this.mask |= params[i].mask
+        }
+        this.mask = ~this.mask
     }
 
     matches(instruction: Instruction): boolean {
@@ -98,102 +117,92 @@ export class InstructionType {
     }
 }
 
-// Instruction type masks based on parameterisation.
-const noParams: u16 = ~0x0000
-const nnnOnly: u16 = ~Instruction.nnnMask
-const xOnly: u16 = ~Instruction.xMask
-const xyOnly: u16 = ~(Instruction.xMask | Instruction.yMask)
-const xkkOnly: u16 = ~(Instruction.xMask | Instruction.kkMask)
-const xynOnly: u16 = ~(Instruction.xMask | Instruction.yMask | Instruction.nMask)
-// Note: nnnOnly, xkkOnly, xynOnly are identical but they are kept for documentation purposes.
-assert(nnnOnly == xkkOnly && nnnOnly == xynOnly)
-
 const instructionTypes = [
-    new InstructionType("CLS", noParams, 0x00E0, (ins, cpu) => {
+    new InstructionType("CLS", [], 0x00E0, (ins, cpu) => {
         cpu.display.raster.fill(0)
     }),
-    new InstructionType("RET", noParams, 0x00EE, (ins, cpu) => {
+    new InstructionType("RET", [], 0x00EE, (ins, cpu) => {
         cpu.PC = cpu.stack[0]
         cpu.SP -= 1
     }),
-    new InstructionType("JP_ADDR", nnnOnly, 0x1000, (ins, cpu) => {
+    new InstructionType("JP_ADDR", [NNN], 0x1000, (ins, cpu) => {
         cpu.PC = ins.nnn
     }),
-    new InstructionType("CALL_ADDR", nnnOnly, 0x2000, (ins, cpu) => {
+    new InstructionType("CALL_ADDR", [NNN], 0x2000, (ins, cpu) => {
         cpu.SP += 1
         cpu.stack[cpu.SP] = cpu.PC
         cpu.PC = ins.nnn
     }),
-    new InstructionType("SE_V_BYTE", xkkOnly, 0x3000, (ins, cpu) => {
+    new InstructionType("SE_V_BYTE", [X, KK], 0x3000, (ins, cpu) => {
         if (cpu.V[ins.x] == ins.kk) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("SNE_V_BYTE", xkkOnly, 0x4000, (ins, cpu) => {
+    new InstructionType("SNE_V_BYTE", [X, KK], 0x4000, (ins, cpu) => {
         if (cpu.V[ins.x] != ins.kk) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("SE_V_V", xyOnly, 0x5000, (ins, cpu) => {
+    new InstructionType("SE_V_V", [X, Y], 0x5000, (ins, cpu) => {
         if (cpu.V[ins.x] == cpu.V[ins.y]) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("LD_V_BYTE", xkkOnly, 0x6000, (ins, cpu) => {
+    new InstructionType("LD_V_BYTE", [X, KK], 0x6000, (ins, cpu) => {
         cpu.V[ins.x] = ins.kk
     }),
-    new InstructionType("ADD_V_BYTE", xkkOnly, 0x7000, (ins, cpu) => {
+    new InstructionType("ADD_V_BYTE", [X, KK], 0x7000, (ins, cpu) => {
         cpu.V[ins.x] += ins.kk
     }),
-    new InstructionType("LD_V_V", xyOnly, 0x8000, (ins, cpu) => {
+    new InstructionType("LD_V_V", [X, Y], 0x8000, (ins, cpu) => {
         cpu.V[ins.x] = cpu.V[ins.y]
     }),
-    new InstructionType("OR_V_V", xyOnly, 0x8001, (ins, cpu) => {
+    new InstructionType("OR_V_V", [X, Y], 0x8001, (ins, cpu) => {
         cpu.V[ins.x] |= cpu.V[ins.y]
     }),
-    new InstructionType("AND_V_V", xyOnly, 0x8002, (ins, cpu) => {
+    new InstructionType("AND_V_V", [X, Y], 0x8002, (ins, cpu) => {
         cpu.V[ins.x] &= cpu.V[ins.y]
     }),
-    new InstructionType("XOR_V_V", xyOnly, 0x8003, (ins, cpu) => {
+    new InstructionType("XOR_V_V", [X, Y], 0x8003, (ins, cpu) => {
         cpu.V[ins.x] ^= cpu.V[ins.y]
     }),
-    new InstructionType("ADD_V_V", xyOnly, 0x8004, (ins, cpu) => {
+    new InstructionType("ADD_V_V", [X, Y], 0x8004, (ins, cpu) => {
         let tmp: u16 = cpu.V[ins.x]
         tmp += cpu.V[ins.y]
         cpu.V[CPU.VF] = tmp & 0xFFFF0000 ? 1 : 0
         cpu.V[ins.x] = tmp & 0xFFFF
     }),
-    new InstructionType("SUB_V_V", xyOnly, 0x8005, (ins, cpu) => {
+    new InstructionType("SUB_V_V", [X, Y], 0x8005, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] > cpu.V[ins.y] ? 1 : 0
         cpu.V[ins.x] -= cpu.V[ins.y]
     }),
-    new InstructionType("SHR_V", xOnly, 0x8006, (ins, cpu) => {
+    new InstructionType("SHR_V", [X], 0x8006, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] & 0x0001
         cpu.V[ins.x] >>= 1
     }),
-    new InstructionType("SUBN_V_V", xyOnly, 0x8007, (ins, cpu) => {
+    new InstructionType("SUBN_V_V", [X, Y], 0x8007, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.y] > cpu.V[ins.x] ? 1 : 0
         cpu.V[ins.x] = cpu.V[ins.y] - cpu.V[ins.x]
     }),
-    new InstructionType("SHL_V", xOnly, 0x800E, (ins, cpu) => {
+    new InstructionType("SHL_V", [X], 0x800E, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] >> 7
             cpu.V[ins.x] <<= 1
     }),
-    new InstructionType("SNE_V_V", xyOnly, 0x9000, (ins, cpu) => {
+    new InstructionType("SNE_V_V", [X, Y], 0x9000, (ins, cpu) => {
         if (cpu.V[ins.x] != cpu.V[ins.y]) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("LD_I_ADDR", nnnOnly, 0xA000, (ins, cpu) => {
+    new InstructionType("LD_I_ADDR", [NNN], 0xA000, (ins, cpu) => {
         cpu.I = ins.nnn
     }),
-    new InstructionType("JP_V0_ADDR", nnnOnly, 0xB000, (ins, cpu) => {
+    new InstructionType("JP_V0_ADDR", [NNN], 0xB000, (ins, cpu) => {
         cpu.PC = ins.nnn + cpu.V[0]
     }),
-    new InstructionType("RND_V_BYTE", xkkOnly, 0xC000, (ins, cpu) => {
+    new InstructionType("RND_V_BYTE", [X, KK], 0xC000, (ins, cpu) => {
         cpu.V[ins.x] = (Math.random() as u8) & ins.kk
     }),
-    new InstructionType("DRW_V_V", xynOnly, 0xD000, (ins, cpu) => {
+    new InstructionType("DRW_V_V", [X, Y, N], 0xD000, (ins, cpu) => {
         const offsetX = cpu.V[ins.x]
         const offsetY = cpu.V[ins.y]
         const sprite = cpu.memory.ram.subarray(cpu.I, cpu.I + ins.n)
@@ -214,38 +223,38 @@ const instructionTypes = [
         }
         cpu.V[CPU.VF] = erased
     }),
-    new InstructionType("SKP_V", xOnly, 0xE09E, (ins, cpu) => {
+    new InstructionType("SKP_V", [X], 0xE09E, (ins, cpu) => {
         if (cpu.keyboard.isDown(cpu.V[ins.x])) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("SKNP_V", xOnly, 0xE0A1, (ins, cpu) => {
+    new InstructionType("SKNP_V", [X], 0xE0A1, (ins, cpu) => {
         if (!cpu.keyboard.isDown(cpu.V[ins.x])) {
             cpu.PC += 2
         }
     }),
-    new InstructionType("LD_V_DT", xOnly, 0xF007, (ins, cpu) => {
+    new InstructionType("LD_V_DT", [X], 0xF007, (ins, cpu) => {
         cpu.V[ins.x] = cpu.DT
     }),
-    new InstructionType("LD_V_K", xOnly, 0xF00A, (ins, cpu) => {
+    new InstructionType("LD_V_K", [X], 0xF00A, (ins, cpu) => {
         cpu.waitForKey = true
         cpu.waitForKeyVx = ins.x
         // see onKeyDown() for rest of this instruction
     }),
-    new InstructionType("LD_DT_V", xOnly, 0xF015, (ins, cpu) => {
+    new InstructionType("LD_DT_V", [X], 0xF015, (ins, cpu) => {
         cpu.DT = cpu.V[ins.x]
     }),
-    new InstructionType("LD_ST_V", xOnly, 0xF018, (ins, cpu) => {
+    new InstructionType("LD_ST_V", [X], 0xF018, (ins, cpu) => {
         cpu.ST = cpu.V[ins.x]
     }),
-    new InstructionType("ADD_I_V", xOnly, 0xF01E, (ins, cpu) => {
+    new InstructionType("ADD_I_V", [X], 0xF01E, (ins, cpu) => {
         cpu.I += cpu.V[ins.x]
     }),
-    new InstructionType("LD_F_V", xOnly, 0xF029, (ins, cpu) => {
+    new InstructionType("LD_F_V", [X], 0xF029, (ins, cpu) => {
         const fontSpriteSize = 5
             cpu.I = cpu.V[ins.x] * fontSpriteSize as u16
     }),
-    new InstructionType("LD_B_V", xOnly, 0xF033, (ins, cpu) => {
+    new InstructionType("LD_B_V", [X], 0xF033, (ins, cpu) => {
         const hundredDigit: u8 = cpu.V[ins.x] / 100
         const hundreds: u8 = hundredDigit * 100
         const tensDigit: u8 = (cpu.V[ins.x] - hundreds) / 10
@@ -255,12 +264,12 @@ const instructionTypes = [
         cpu.memory.ram[cpu.I + 1] = tensDigit
         cpu.memory.ram[cpu.I + 2] = onesDigit
     }),
-    new InstructionType("LD_I_V", xOnly, 0xF055, (ins, cpu) => {
+    new InstructionType("LD_I_V", [X], 0xF055, (ins, cpu) => {
         for (let i: u8 = 0; i <= ins.x; i++) {
             cpu.memory.ram[cpu.I + i] = cpu.V[i]
         }
     }),
-    new InstructionType("LD_V_I", xOnly, 0xF065, (ins, cpu) => {
+    new InstructionType("LD_V_I", [X], 0xF065, (ins, cpu) => {
         for (let i: u8 = 0; i <= ins.x; i++) {
             cpu.V[i] = cpu.memory.ram[cpu.I + i]
         }

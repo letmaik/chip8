@@ -85,20 +85,9 @@ export function getInstructionParameters(): string {
   const ins = chip8.cpu.currentInstruction
   const insType = getInstructionType(ins)
   let s: Array<string> = []
-  if (insType.hasParam(Instruction.xMask)) {
-    s.push('x=' + hex(ins.x))
-  }
-  if (insType.hasParam(Instruction.yMask)) {
-    s.push('y=' + hex(ins.y))
-  }
-  if (insType.hasParam(Instruction.nMask)) {
-    s.push('n=' + hex(ins.n))
-  }
-  if (insType.hasParam(Instruction.kkMask)) {
-    s.push('kk=' + hex(ins.kk))
-  }
-  if (insType.hasParam(Instruction.nnnMask)) {
-    s.push('nnn=' + hex(ins.nnn))
+  for (let i=0; i < insType.params.length; i++) {
+    const param = insType.params[i]
+    s.push(param.name + '=' + (param.isU16 ? hex(param.getU16(ins.ins)) : hex(param.getU8(ins.ins))))
   }
   return s.join(', ')
 }

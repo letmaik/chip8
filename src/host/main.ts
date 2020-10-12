@@ -45,6 +45,7 @@ async function main() {
     module.enableExportFunctionUnsafeReturnValue()
 
     const exports = module.exports
+    const unboundExports = module.unboundExports
     
     const romResponse = await fetch("/assets/IBM Logo.ch8")
     const rom = await romResponse.arrayBuffer()
@@ -74,13 +75,16 @@ async function main() {
             console.log('sound: on')
         }
 
+        // u16 return values are buggy with as-bind, using direct access here.
+        // https://github.com/torch2424/as-bind/issues/50
+
         console.log('raster', raster)
-        console.log('keys', bin(exports.getKeys()))
+        console.log('keys', bin(unboundExports.getKeys()))
         console.log('register V', exports.getVRegisters().value)
-        console.log('register I', hex(exports.getIRegister()))
+        console.log('register I', hex(unboundExports.getIRegister()))
         console.log('register DT', exports.getDTRegister())
         console.log('register ST', exports.getSTRegister())
-        console.log('register PC', hex(exports.getPCRegister()))
+        console.log('register PC', hex(unboundExports.getPCRegister()))
         console.log('register SP', exports.getSPRegister())
         console.log('register stack', exports.getStackRegister().value)
 
