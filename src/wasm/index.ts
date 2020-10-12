@@ -77,10 +77,7 @@ export function getInstructionTypeName(): string {
   return insType.name
 }
 
-function hex_u8(n: u8): string {
-  return '0x' + n.toString(16)
-}
-function hex_u16(n: u16): string {
+function hex<T extends number>(n: T): string {
   return '0x' + n.toString(16)
 }
 
@@ -89,19 +86,19 @@ export function getInstructionParameters(): string {
   const insType = getInstructionType(ins)
   let s: Array<string> = []
   if (insType.hasParam(Instruction.xMask)) {
-    s.push('x=' + hex_u8(ins.x))
+    s.push('x=' + hex(ins.x))
   }
   if (insType.hasParam(Instruction.yMask)) {
-    s.push('y=' + hex_u8(ins.y))
+    s.push('y=' + hex(ins.y))
   }
   if (insType.hasParam(Instruction.nMask)) {
-    s.push('n=' + hex_u8(ins.n))
+    s.push('n=' + hex(ins.n))
   }
   if (insType.hasParam(Instruction.kkMask)) {
-    s.push('kk=' + hex_u8(ins.kk))
+    s.push('kk=' + hex(ins.kk))
   }
   if (insType.hasParam(Instruction.nnnMask)) {
-    s.push('nnn=' + hex_u16(ins.nnn))
+    s.push('nnn=' + hex(ins.nnn))
   }
   return s.join(', ')
 }
