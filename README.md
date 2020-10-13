@@ -10,6 +10,7 @@ http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 ### Unit tests
 
 https://github.com/SnoozeTime/chip8/blob/master/test/opcode_test.cc
+https://github.com/DavidJowett/chip8-emulator/blob/master/test/chip8_test.c
 
 ### Roms
 

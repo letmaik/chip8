@@ -1,9 +1,14 @@
 import { assert } from 'chai'
 import { wasm, unboundWasm } from './wasm'
 
-function run(program: Array<number>) {
+function loadProgram(program: Array<number>) {
   wasm.init()
   wasm.loadProgram(new Uint8Array(program))
+  return state()
+}
+
+function run(program: Array<number>) {
+  loadProgram(program)
   return step()
 }
 
@@ -34,7 +39,7 @@ function state() {
 
 // Tests from https://github.com/SnoozeTime/chip8/blob/master/test/opcode_test.cc
 
-describe('Instructions', function () {
+describe('SnoozeTime instruction tests', function () {
   describe('LD_I_ADDR', function () {
     it('should store the given address in the I register', function () {
       // 0xA2F0 - move 2F0 in I
@@ -279,5 +284,24 @@ describe('Instructions', function () {
       assert.equal(r.ram[0x201], 0x05)
       assert.equal(r.ram[0x202], 0x05)
     })
+  })
+})
+
+// https://github.com/DavidJowett/chip8-emulator/blob/master/test/chip8_test.c
+
+describe('DavidJowett instruction tests', function () {
+  describe('DRW_V_V', function () {
+    it('should draw sprites correctly', function () {
+      // check that one line is drawn correctly
+      let r = loadProgram([0xD0, 0x11])
+      r.v[0] = 0
+      r.v[1] = 0
+      r.ram[0] = 0xFF
+      r = step()
+      assert.deepEqual(r.raster.subarray(0, 8), new Uint8Array([1,1,1,1,1,1,1,1]))
+      assert.equal(r.v[0xF], 0)
+    })
+
+    // TODO continue...
   })
 })

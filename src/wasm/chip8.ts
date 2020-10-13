@@ -207,14 +207,14 @@ export const instructionTypes = [
         const offsetY = cpu.V[ins.y]
         const sprite = cpu.memory.ram.subarray(cpu.I, cpu.I + ins.n)
         const spriteWidth: u8 = 8
-        const spriteHeight: u8 = ins.n * 8
+        const spriteHeight: u8 = ins.n
         let erased: u8 = 0
         for (let spriteY: u8 = 0; spriteY < spriteHeight; spriteY++) {
             const displayY: u8 = (offsetY + spriteY) % Display.height
             for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
                 const displayX: u8 = (offsetX + spriteX) % Display.width
                 const oldVal = cpu.display.get(displayX, displayY)
-                const newVal = oldVal ^ ((sprite[spriteY/8] >> spriteX) & (0x8000 >> spriteX) )
+                const newVal = oldVal ^ ((sprite[spriteY] >> spriteX) & (0x80 as u8 >> spriteX) )
                 if (oldVal && !newVal) {
                     erased = 1
                 }
