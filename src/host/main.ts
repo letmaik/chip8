@@ -56,7 +56,11 @@ async function main() {
     const offColor = [0, 0, 0]
     const onColor = [255, 255, 255]
 
-    console.log(exports.getInstructionTypes())
+    const urlParams = new URLSearchParams(window.location.search)
+    const log = urlParams.get('log') == '1'
+
+    if (log)
+        console.log(exports.getInstructionTypes())
 
     exports.init()
     exports.loadProgram(new Uint8Array(rom))
@@ -73,33 +77,36 @@ async function main() {
         }
         ctx.putImageData(imgData, 0, 0)
 
-        if (exports.isSoundOn()) {
+        if (log && exports.isSoundOn()) {
             console.log('sound: on')
         }
 
         // u16 return values are buggy with as-bind, using direct access here.
         // https://github.com/torch2424/as-bind/issues/50
 
-        console.log('ram', exports.getRam().value)
-        console.log('raster', raster)
-        console.log('keys', bin(unboundExports.getKeys()))
-        console.log('register V', exports.getVRegisters().value)
-        console.log('register I', hex(unboundExports.getIRegister()))
-        console.log('register DT', exports.getDTRegister())
-        console.log('register ST', exports.getSTRegister())
-        console.log('register PC', hex(unboundExports.getPCRegister()))
-        console.log('register SP', exports.getSPRegister())
-        console.log('register stack', exports.getStackRegister().value)
-
-        console.log(`instruction: ${exports.getInstructionTypeName()} ${exports.getInstructionParameters()}`)
+        if (log) {
+            console.log('ram', exports.getRam().value)
+            console.log('raster', raster)
+            console.log('keys', bin(unboundExports.getKeys()))
+            console.log('register V', exports.getVRegisters().value)
+            console.log('register I', hex(unboundExports.getIRegister()))
+            console.log('register DT', exports.getDTRegister())
+            console.log('register ST', exports.getSTRegister())
+            console.log('register PC', hex(unboundExports.getPCRegister()))
+            console.log('register SP', exports.getSPRegister())
+            console.log('register stack', exports.getStackRegister().value)
+            console.log(`instruction: ${exports.getInstructionTypeName()} ${exports.getInstructionParameters()}`)
+        }
         exports.stepCPU()
     }
 
+    (<any>window).stopChip8 = false
     function loop() {
         step()
-        requestAnimationFrame(loop)
+        if (!(<any>window).stopChip8)
+            setTimeout(loop, 500)
     }
-    requestAnimationFrame(loop)
+    loop()
 
     document.addEventListener('keydown', e => {
         const chip8Key = keyMap[e.code]

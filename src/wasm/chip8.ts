@@ -104,7 +104,7 @@ export class InstructionType {
     mask: u16
 
     constructor(public name: string, public params: Array<Parameter>, public match: u16,
-                public execute: (ins: Instruction, cpu: CPU) => void) {
+                public execute: (ins: Instruction, cpu: CPU) => void, public incPC: bool=true) {
         this.mask = 0x0000
         for (let i=0; i < params.length; i++) {
             this.mask |= params[i].mask
@@ -122,17 +122,17 @@ export const instructionTypes = [
         cpu.display.raster.fill(0)
     }),
     new InstructionType("RET", [], 0x00EE, (ins, cpu) => {
-        cpu.PC = cpu.stack[0]
+        cpu.PC = cpu.stack[cpu.SP]
         cpu.SP -= 1
     }),
     new InstructionType("JP_ADDR", [NNN], 0x1000, (ins, cpu) => {
         cpu.PC = ins.nnn
-    }),
+    }, false),
     new InstructionType("CALL_ADDR", [NNN], 0x2000, (ins, cpu) => {
         cpu.SP += 1
         cpu.stack[cpu.SP] = cpu.PC
         cpu.PC = ins.nnn
-    }),
+    }, false),
     new InstructionType("SE_V_BYTE", [X, KK], 0x3000, (ins, cpu) => {
         if (cpu.V[ins.x] == ins.kk) {
             cpu.PC += 2
@@ -169,14 +169,14 @@ export const instructionTypes = [
     new InstructionType("ADD_V_V", [X, Y], 0x8004, (ins, cpu) => {
         let tmp: u16 = cpu.V[ins.x]
         tmp += cpu.V[ins.y]
-        cpu.V[CPU.VF] = tmp & 0xFFFF0000 ? 1 : 0
-        cpu.V[ins.x] = tmp & 0xFFFF
+        cpu.V[CPU.VF] = tmp & 0xFF00 ? 1 : 0
+        cpu.V[ins.x] = tmp & 0xFF
     }),
     new InstructionType("SUB_V_V", [X, Y], 0x8005, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] > cpu.V[ins.y] ? 1 : 0
         cpu.V[ins.x] -= cpu.V[ins.y]
     }),
-    new InstructionType("SHR_V", [X], 0x8006, (ins, cpu) => {
+    new InstructionType("SHR_V", [X, Y], 0x8006, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] & 0x0001
         cpu.V[ins.x] >>= 1
     }),
@@ -184,9 +184,9 @@ export const instructionTypes = [
         cpu.V[CPU.VF] = cpu.V[ins.y] > cpu.V[ins.x] ? 1 : 0
         cpu.V[ins.x] = cpu.V[ins.y] - cpu.V[ins.x]
     }),
-    new InstructionType("SHL_V", [X], 0x800E, (ins, cpu) => {
+    new InstructionType("SHL_V", [X, Y], 0x800E, (ins, cpu) => {
         cpu.V[CPU.VF] = cpu.V[ins.x] >> 7
-            cpu.V[ins.x] <<= 1
+        cpu.V[ins.x] <<= 1
     }),
     new InstructionType("SNE_V_V", [X, Y], 0x9000, (ins, cpu) => {
         if (cpu.V[ins.x] != cpu.V[ins.y]) {
@@ -198,7 +198,7 @@ export const instructionTypes = [
     }),
     new InstructionType("JP_V0_ADDR", [NNN], 0xB000, (ins, cpu) => {
         cpu.PC = ins.nnn + cpu.V[0]
-    }),
+    }, false),
     new InstructionType("RND_V_BYTE", [X, KK], 0xC000, (ins, cpu) => {
         cpu.V[ins.x] = (Math.random() as u8) & ins.kk
     }),
@@ -240,7 +240,7 @@ export const instructionTypes = [
         cpu.waitForKey = true
         cpu.waitForKeyVx = ins.x
         // see onKeyDown() for rest of this instruction
-    }),
+    }, false),
     new InstructionType("LD_DT_V", [X], 0xF015, (ins, cpu) => {
         cpu.DT = cpu.V[ins.x]
     }),
@@ -302,7 +302,7 @@ export class CPU extends KeyboardListener {
     SP: u8 = 0  // stack pointer
     stack: Uint16Array = new Uint16Array(16)
 
-    static VF: u8 = 15
+    static VF: u8 = 0xF
 
     // Special support for LD_V_K instruction
     waitForKey: bool = false
@@ -313,6 +313,7 @@ export class CPU extends KeyboardListener {
             this.waitForKey = false
             // rest of the LD_V_K instruction
             this.V[this.waitForKeyVx] = key
+            this.PC += 2
         }
     }
 
@@ -336,7 +337,9 @@ export class CPU extends KeyboardListener {
         const insType = getInstructionType(ins)
         insType.execute(ins, this)
 
-        this.PC += 2
+        if (insType.incPC) {
+            this.PC += 2
+        }
     }
 
     get isSoundOn(): boolean {

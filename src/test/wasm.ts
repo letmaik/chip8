@@ -17,4 +17,4 @@ wasmModule.enableExportFunctionUnsafeReturnValue()
 
 const wasmExports = wasmModule.exports
 const wasmUnboundExports = wasmModule.unboundExports
-export { wasmExports as exports, wasmUnboundExports as unboundExports }
+export { wasmExports as wasm, wasmUnboundExports as unboundWasm }
