@@ -214,7 +214,7 @@ export const instructionTypes = [
             for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
                 const displayX: u8 = (offsetX + spriteX) % Display.width
                 const oldVal = cpu.display.get(displayX, displayY)
-                const newVal = oldVal ^ (sprite[spriteY] & (0x80 as u8 >> spriteX) )
+                const newVal = oldVal ^ ((sprite[spriteY] & (0x80 as u8 >> spriteX)) ? 1 : 0)
                 if (oldVal && !newVal) {
                     cpu.V[CPU.VF] = 1
                 }

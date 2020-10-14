@@ -12,8 +12,8 @@ function run(program: Array<number>) {
   return step()
 }
 
-function step(n=1) {
-  for (let i=0; i < n; i++) {
+function step(n = 1) {
+  for (let i = 0; i < n; i++) {
     wasm.stepCPU()
   }
   return state()
@@ -41,6 +41,28 @@ function state() {
 
 function bin(s: string) {
   return parseInt(s, 2)
+}
+
+// yEnd and xEnd are exclusive.
+function slice2D(arr: Uint8Array, height: number, width: number,
+  yStart: number, yEnd: number, xStart: number, xEnd: number) {
+  if (height < 0 || width < 0 || yStart < 0 || xStart < 0 ||
+    xStart > xEnd || yStart > yEnd || yEnd > height || xEnd > width) {
+    throw new RangeError()
+  }
+  const newHeight = yEnd - yStart
+  const newWidth = xEnd - xStart
+  const out = new Uint8Array(newHeight * newWidth)
+  for (let y = yStart; y < yEnd; y++) {
+    const start = y * width + xStart
+    const end = start + newWidth
+    out.set(arr.subarray(start, end), (y - yStart) * newWidth)
+  }
+  return out
+}
+
+function sliceRaster(raster: Uint8Array, ySlice: [number, number?], xSlice: [number, number?]) {
+  return slice2D(raster, 32, 64, ySlice[0], ySlice[1] || (ySlice[0] + 1), xSlice[0], xSlice[1] || (xSlice[0] + 1))
 }
 
 // Tests from https://github.com/SnoozeTime/chip8/blob/master/test/opcode_test.cc
@@ -75,7 +97,7 @@ describe('SnoozeTime instruction tests', function () {
       // 0x2204 - execute subroutine at index 204.
       let r = run([
         0x22, 0x04, // execute 0xA2FF subroutine
-        0xA2, 0xF0, 
+        0xA2, 0xF0,
         0xA2, 0xFF, // subroutine start.
         0x00, 0xEE])
 
@@ -92,7 +114,7 @@ describe('SnoozeTime instruction tests', function () {
       r = step() // return;
       assert.equal(r.sp, 0)
       assert.equal(r.pc, 0x202)
-  
+
       r = step()
       assert.equal(r.i, 0x2F0)
     })
@@ -293,29 +315,7 @@ describe('SnoozeTime instruction tests', function () {
   })
 })
 
-// https://github.com/DavidJowett/chip8-emulator/blob/master/test/chip8_test.c
-
-// yEnd and xEnd are exclusive.
-function slice2D(arr: Uint8Array, height: number, width: number,
-                 yStart: number, yEnd: number, xStart: number, xEnd: number) {
-  if (height < 0 || width < 0 || yStart < 0 || xStart < 0 || 
-      xStart > xEnd || yStart > yEnd || yEnd > height || xEnd > width) {
-    throw new RangeError()
-  }
-  const newHeight = yEnd - yStart
-  const newWidth = xEnd - xStart
-  const out = new Uint8Array(newHeight * newWidth)
-  for (let y=yStart; y < yEnd; y++) {
-    const start = y * width + xStart
-    const end = start + newWidth
-    out.set(arr.subarray(start, end), (y - yStart) * newWidth)
-  }
-  return out
-}
-
-function sliceRaster(raster: Uint8Array, ySlice: [number,number?], xSlice: [number, number?]) {
-  return slice2D(raster, 32, 64, ySlice[0], ySlice[1] || (ySlice[0] + 1), xSlice[0], xSlice[1] || (xSlice[0] + 1))
-}
+// Tests from https://github.com/DavidJowett/chip8-emulator/blob/master/test/chip8_test.c
 
 describe('DavidJowett instruction tests', function () {
   describe('DRW_V_V', function () {
@@ -332,7 +332,7 @@ describe('DavidJowett instruction tests', function () {
       r = step(6)
       assert.deepEqual(
         sliceRaster(r.raster, [0], [0, 8]),
-        new Uint8Array([1,1,1,1,1,1,1,1]))
+        new Uint8Array([1, 1, 1, 1, 1, 1, 1, 1]))
       assert.equal(r.v[0xF], 0)
     })
     it('should draw two lines correctly', function () {
@@ -350,12 +350,118 @@ describe('DavidJowett instruction tests', function () {
       assert.deepEqual(
         sliceRaster(r.raster, [1, 3], [0, 8]),
         new Uint8Array([
-          1,0,1,0,1,0,1,0,
-          1,0,1,0,1,0,1,0,
+          1, 0, 1, 0, 1, 0, 1, 0,
+          1, 0, 1, 0, 1, 0, 1, 0,
         ]))
       assert.equal(r.v[0xF], 0)
     })
-
-    // TODO continue...
+    it('should XOR pixels', function () {
+      let sprite = bin('10101010')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b10101010 (sprite)
+        0x61, 0x00,   // V[1] = 0 (draw offset x)
+        0x62, 0x00,   // V[2] = 0 (draw offset y)
+        0xF0, 0x55,   // ram[0] = V[0]
+        0xD1, 0x21,   // draw sprite ram[I] of length 1 at V[1],V[2]
+        0x12, 0x00    // jump back to the start 0x200
+      ])
+      r = step(13)
+      console.log(`instruction: ${wasm.getInstructionTypeName()} ${wasm.getInstructionParameters()}`)
+      assert.deepEqual(
+        sliceRaster(r.raster, [0], [0, 8]),
+        new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      assert.equal(r.v[0xF], 1)
+    })
+    it('should draw sprites that overlap byte bounds', function () {
+      let sprite = bin('11111111')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b11111111 (sprite)
+        0x61, sprite, // V[1] = 0b11111111 (sprite)
+        0x62, 0x04,   // V[2] = 4 (draw offset x)
+        0x63, 0x04,   // V[3] = 4 (draw offset y)
+        0xF1, 0x55,   // ram[0] = V[0], ram[1] = V[1]
+        0xD2, 0x32,   // draw sprite ram[I] of length 2 at V[2],V[3]
+      ])
+      r = step(7)
+      assert.deepEqual(
+        sliceRaster(r.raster, [4, 6], [0, 16]),
+        new Uint8Array([
+          0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+          0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+        ]))
+      assert.equal(r.v[0xF], 0)
+    })
+    it('should wrap lines', function () {
+      let sprite = bin('11111111')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b11111111 (sprite)
+        0x61, sprite, // V[1] = 0b11111111 (sprite)
+        0x62, 60,     // V[2] = 60 (draw offset x)
+        0x63, 8,      // V[3] = 8  (draw offset y)
+        0xF1, 0x55,   // ram[0] = V[0], ram[1] = V[1]
+        0xD2, 0x32,   // draw sprite ram[I] of length 2 at V[2],V[3]
+      ])
+      r = step(7)
+      assert.deepEqual(
+        sliceRaster(r.raster, [8, 10], [56, 64]),
+        new Uint8Array([
+          0, 0, 0, 0, 1, 1, 1, 1,
+          0, 0, 0, 0, 1, 1, 1, 1,
+        ]))
+      assert.deepEqual(
+        sliceRaster(r.raster, [8, 10], [0, 8]),
+        new Uint8Array([
+          1, 1, 1, 1, 0, 0, 0, 0,
+          1, 1, 1, 1, 0, 0, 0, 0,
+        ]))
+      assert.equal(r.v[0xF], 0)
+    })
+    it('should wrap start offsets outside the screen', function () {
+      let sprite = bin('11001100')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b11001100 (sprite)
+        0x61, sprite, // V[1] = 0b11001100 (sprite)
+        0x62, 130,    // V[2] = 130 (draw offset x)
+        0x63, 74,     // V[3] = 74 (draw offset y)
+        0xF1, 0x55,   // ram[0] = V[0], ram[1] = V[1]
+        0xD2, 0x32,   // draw sprite ram[I] of length 2 at V[2],V[3]
+      ])
+      r = step(7)
+      assert.deepEqual(
+        sliceRaster(r.raster, [10, 12], [0, 16]),
+        new Uint8Array([
+          0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]))
+      assert.equal(r.v[0xF], 0)
+    })
+    it('should wrap around rows', function () {
+      let sprite = bin('11111111')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b11111111 (sprite)
+        0x61, sprite, // V[1] = 0b11111111 (sprite)
+        0x62, 7,      // V[2] = 7 (draw offset x)
+        0x63, 31,     // V[3] = 31 (draw offset y)
+        0xF1, 0x55,   // ram[0] = V[0], ram[1] = V[1]
+        0xD2, 0x32,   // draw sprite ram[I] of length 2 at V[2],V[3]
+      ])
+      r = step(7)
+      assert.deepEqual(
+        sliceRaster(r.raster, [31], [0, 16]),
+        new Uint8Array([
+          0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0     
+        ]))
+      assert.deepEqual(
+        sliceRaster(r.raster, [0], [0, 16]),
+        new Uint8Array([
+          0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0
+        ]))
+      assert.equal(r.v[0xF], 0)
+    })
   })
 })
