@@ -1,5 +1,5 @@
 import { AsBind } from "as-bind"
-import * as roms from "./roms"
+import { getRoms, defaultRom } from "./roms"
 
 // Map key codes to CHIP-8 keys.
 // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
@@ -48,9 +48,10 @@ async function main() {
     const exports = module.exports
     const unboundExports = module.unboundExports
     
-    const romUrl = roms.toDownloadUrl(roms.defaultRom)
-    const romResponse = await fetch(romUrl)
-    const rom = await romResponse.arrayBuffer()
+    const roms = await getRoms()
+    const rom = roms[defaultRom]
+    const romResponse = await fetch(rom.romUrl)
+    const romBuf = await romResponse.arrayBuffer()
 
     const canvas = document.getElementById('display') as HTMLCanvasElement
     const ctx = canvas.getContext("2d")
@@ -65,7 +66,7 @@ async function main() {
         console.log(exports.getInstructionTypes())
 
     exports.init()
-    exports.loadProgram(new Uint8Array(rom))
+    exports.loadProgram(new Uint8Array(romBuf))
     function step() {
         const raster: Uint8Array = exports.getDisplayRaster().value
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
