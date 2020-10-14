@@ -1,4 +1,5 @@
 import { AsBind } from "as-bind"
+import * as roms from "./roms"
 
 // Map key codes to CHIP-8 keys.
 // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
@@ -47,7 +48,8 @@ async function main() {
     const exports = module.exports
     const unboundExports = module.unboundExports
     
-    const romResponse = await fetch("/assets/test_opcode.ch8")
+    const romUrl = roms.toDownloadUrl(roms.defaultRom)
+    const romResponse = await fetch(romUrl)
     const rom = await romResponse.arrayBuffer()
 
     const canvas = document.getElementById('display') as HTMLCanvasElement
