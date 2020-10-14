@@ -104,7 +104,7 @@ async function main() {
     function loop() {
         step()
         if (!(<any>window).stopChip8)
-            setTimeout(loop, 500)
+            setTimeout(loop, 200)
     }
     loop()
 

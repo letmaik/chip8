@@ -208,20 +208,19 @@ export const instructionTypes = [
         const sprite = cpu.memory.ram.subarray(cpu.I, cpu.I + ins.n)
         const spriteWidth: u8 = 8
         const spriteHeight: u8 = ins.n
-        let erased: u8 = 0
+        cpu.V[CPU.VF] = 0
         for (let spriteY: u8 = 0; spriteY < spriteHeight; spriteY++) {
             const displayY: u8 = (offsetY + spriteY) % Display.height
             for (let spriteX: u8 = 0; spriteX < spriteWidth; spriteX++) {
                 const displayX: u8 = (offsetX + spriteX) % Display.width
                 const oldVal = cpu.display.get(displayX, displayY)
-                const newVal = oldVal ^ ((sprite[spriteY] >> spriteX) & (0x80 as u8 >> spriteX) )
+                const newVal = oldVal ^ (sprite[spriteY] & (0x80 as u8 >> spriteX) )
                 if (oldVal && !newVal) {
-                    erased = 1
+                    cpu.V[CPU.VF] = 1
                 }
                 cpu.display.set(displayX, displayY, newVal as bool)
             }
         }
-        cpu.V[CPU.VF] = erased
     }),
     new InstructionType("SKP_V", [X], 0xE09E, (ins, cpu) => {
         if (cpu.keyboard.isDown(cpu.V[ins.x])) {

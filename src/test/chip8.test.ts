@@ -12,8 +12,10 @@ function run(program: Array<number>) {
   return step()
 }
 
-function step() {
-  wasm.stepCPU()
+function step(n=1) {
+  for (let i=0; i < n; i++) {
+    wasm.stepCPU()
+  }
   return state()
 }
 
@@ -35,6 +37,10 @@ function state() {
     sp: wasm.getSPRegister(),
     stack: wasm.getStackRegister().value
   }
+}
+
+function bin(s: string) {
+  return parseInt(s, 2)
 }
 
 // Tests from https://github.com/SnoozeTime/chip8/blob/master/test/opcode_test.cc
@@ -289,16 +295,64 @@ describe('SnoozeTime instruction tests', function () {
 
 // https://github.com/DavidJowett/chip8-emulator/blob/master/test/chip8_test.c
 
+// yEnd and xEnd are exclusive.
+function slice2D(arr: Uint8Array, height: number, width: number,
+                 yStart: number, yEnd: number, xStart: number, xEnd: number) {
+  if (height < 0 || width < 0 || yStart < 0 || xStart < 0 || 
+      xStart > xEnd || yStart > yEnd || yEnd > height || xEnd > width) {
+    throw new RangeError()
+  }
+  const newHeight = yEnd - yStart
+  const newWidth = xEnd - xStart
+  const out = new Uint8Array(newHeight * newWidth)
+  for (let y=yStart; y < yEnd; y++) {
+    const start = y * width + xStart
+    const end = start + newWidth
+    out.set(arr.subarray(start, end), (y - yStart) * newWidth)
+  }
+  return out
+}
+
+function sliceRaster(raster: Uint8Array, ySlice: [number,number?], xSlice: [number, number?]) {
+  return slice2D(raster, 32, 64, ySlice[0], ySlice[1] || (ySlice[0] + 1), xSlice[0], xSlice[1] || (xSlice[0] + 1))
+}
+
 describe('DavidJowett instruction tests', function () {
   describe('DRW_V_V', function () {
-    it('should draw sprites correctly', function () {
-      // check that one line is drawn correctly
-      let r = loadProgram([0xD0, 0x11])
-      r.v[0] = 0
-      r.v[1] = 0
-      r.ram[0] = 0xFF
-      r = step()
-      assert.deepEqual(r.raster.subarray(0, 8), new Uint8Array([1,1,1,1,1,1,1,1]))
+    it('should draw one line correctly', function () {
+      let sprite = bin('11111111')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b11111111 (sprite)
+        0x61, 0x00,   // V[1] = 0 (draw offset x)
+        0x62, 0x00,   // V[2] = 0 (draw offset y)
+        0xF0, 0x55,   // ram[0] = V[0]
+        0xD1, 0x21,   // draw sprite ram[I] of length 1 at V[1],V[2]
+      ])
+      r = step(6)
+      assert.deepEqual(
+        sliceRaster(r.raster, [0], [0, 8]),
+        new Uint8Array([1,1,1,1,1,1,1,1]))
+      assert.equal(r.v[0xF], 0)
+    })
+    it('should draw two lines correctly', function () {
+      let sprite = bin('10101010')
+      let r = loadProgram([
+        0xA0, 0x00,   // I    = 0 (sprite start address)
+        0x60, sprite, // V[0] = 0b10101010 (sprite)
+        0x61, sprite, // V[1] = 0b10101010 (sprite)
+        0x62, 0x00,   // V[2] = 0 (draw offset x)
+        0x63, 0x01,   // V[3] = 1 (draw offset y)
+        0xF1, 0x55,   // ram[0] = V[0], ram[1] = V[1]
+        0xD2, 0x32,   // draw sprite ram[I] of length 2 at V[2],V[3]
+      ])
+      r = step(7)
+      assert.deepEqual(
+        sliceRaster(r.raster, [1, 3], [0, 8]),
+        new Uint8Array([
+          1,0,1,0,1,0,1,0,
+          1,0,1,0,1,0,1,0,
+        ]))
       assert.equal(r.v[0xF], 0)
     })
 
