@@ -33,6 +33,10 @@ function hex(n: number) {
     return '0x' + n.toString(16)
 }
 
+const normalSpeed = 100
+const turboSpeed = 50
+let currentSpeed = normalSpeed
+
 let roms: Roms
 let exports: any
 let unboundExports: any
@@ -61,18 +65,45 @@ async function main() {
     unboundExports = module.unboundExports
     
     roms = await getRoms()
-
+    const sortedRoms = Object.entries(roms).sort(([, romA], [, romB]) => romA.title.localeCompare(romB.title))
+    
     const romSelector = document.getElementById('rom-selector') as HTMLSelectElement
-    for (let [romId, rom] of Object.entries(roms)) {
+    for (let [romId, rom] of sortedRoms) {
         var option = document.createElement("option")
         option.value = romId
         option.text = rom.title
         romSelector.add(option) 
     }
 
+    const romInfo = document.getElementById('rom-info') as HTMLDivElement
+
     const loadRomBtn = document.getElementById('load-rom-btn') as HTMLButtonElement
-    loadRomBtn.addEventListener('click', e => {
-        loadRom(romSelector.value)
+    loadRomBtn.addEventListener('click', async () => {
+        const romId = romSelector.value
+        loadRom(romId)
+        const rom = roms[romId]
+
+        let description = ''
+        if (rom.desc) {
+            description = rom.desc
+        } else if (rom.txtUrl) {
+            const r = await fetch(rom.txtUrl)
+            if (r.ok) {
+                description = await r.text()
+            }
+        }
+        romInfo.innerHTML = `
+            <a href="${rom.infoUrl}" target="_blank">${rom.infoUrl}</a><br />
+            <pre>${description}</pre>
+        `
+    })
+
+    const turboBtn = document.getElementById('turbo-btn') as HTMLButtonElement
+    turboBtn.addEventListener('click', () => {
+        currentSpeed = currentSpeed === normalSpeed ? turboSpeed : normalSpeed
+        turboBtn.style.fontWeight = currentSpeed === turboSpeed ? 'bold' : ''
+        clearInterval(timer)
+        timer = window.setInterval(step, currentSpeed)
     })
 
     canvas = document.getElementById('display') as HTMLCanvasElement
@@ -87,11 +118,11 @@ async function main() {
 
     document.addEventListener('keydown', e => {
         const chip8Key = keyMap[e.code]
-        exports.setKeyDown(chip8Key, true)
+        unboundExports.setKeyDown(chip8Key, true)
     })
     document.addEventListener('keyup', e => {
         const chip8Key = keyMap[e.code]
-        exports.setKeyDown(chip8Key, false)
+        unboundExports.setKeyDown(chip8Key, false)
     })
 }
 
@@ -108,7 +139,7 @@ function step() {
     }
     ctx.putImageData(imgData, 0, 0)
 
-    if (log && exports.isSoundOn()) {
+    if (log && unboundExports.isSoundOn()) {
         console.log('sound: on')
     }
 
@@ -140,7 +171,7 @@ async function loadRom(romId: string) {
     exports.init()
     exports.loadProgram(new Uint8Array(romBuf))
 
-    timer = window.setInterval(step, 200)
+    timer = window.setInterval(step, currentSpeed)
 }
 
 main()

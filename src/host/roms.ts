@@ -2,6 +2,7 @@ export const defaultRom = "chip8-test-rom"
 
 export interface Rom {
     title: string
+    desc?: string
     infoUrl: string
     romUrl: string
     txtUrl?: string
@@ -17,6 +18,9 @@ export async function getRoms(): Promise<Roms> {
     for (const id in roms) {
         roms[id].infoUrl = "https://github.com/JohnEarnest/chip8Archive/tree/master/roms/" + id + ".ch8"
         roms[id].romUrl = toDownloadUrl(roms[id].infoUrl)
+        if (roms[id].platform !== 'chip8') {
+            delete roms[id]
+        }
     }
 
     r = await fetch("https://api.github.com/repos/dmatlack/chip8/git/trees/master?recursive=1")
