@@ -9,11 +9,15 @@
       }
       #display {
         image-rendering: crisp-edges;
+        image-rendering: pixelated;
       }
     </style>
   </head>
   <body class="container">
     <canvas id="display" width="64" height="32" style="width: 512px; height: 256px"></canvas>
+    <br />
+    <select id="rom-selector"></select>
+    <button id="load-rom-btn">Load</button>
 
     <script src="build/bundle.js"></script>
   </body>
