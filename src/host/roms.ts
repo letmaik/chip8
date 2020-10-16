@@ -1,5 +1,7 @@
 export const defaultRom = "chip8-test-rom"
 
+const defaultTickRate = 10
+
 export interface Rom {
     title: string
     desc?: string
@@ -7,7 +9,9 @@ export interface Rom {
     romUrl: string
     txtUrl?: string
     platform: string
-    options: {}
+    options: {
+        tickrate: number
+    }
 }
 
 export type Roms = { [romId: string]: Rom }
@@ -39,7 +43,9 @@ export async function getRoms(): Promise<Roms> {
             romUrl: toDownloadUrl(url),
             txtUrl: toDownloadUrl(txtUrl),
             platform: "chip8",
-            options: {}
+            options: {
+                tickrate: defaultTickRate
+            }
         } as Rom
     }
 
@@ -48,7 +54,9 @@ export async function getRoms(): Promise<Roms> {
         infoUrl: "https://github.com/corax89/chip8-test-rom",
         romUrl: toDownloadUrl("https://github.com/corax89/chip8-test-rom/blob/master/test_opcode.ch8"),
         platform: "chip8",
-        options: {}
+        options: {
+            tickrate: defaultTickRate
+        }
     }
 
     return roms

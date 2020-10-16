@@ -33,9 +33,8 @@ function hex(n: number) {
     return '0x' + n.toString(16)
 }
 
-const normalSpeed = 100
-const turboSpeed = 50
-let currentSpeed = normalSpeed
+let standardSpeed: number
+let currentSpeed: number
 
 let roms: Roms
 let exports: any
@@ -48,6 +47,8 @@ let ctx: CanvasRenderingContext2D
 
 const offColor = [0, 0, 0]
 const onColor = [255, 255, 255]
+
+const turboBtn = document.getElementById('turbo-btn') as HTMLButtonElement
 
 async function main() {
     const imports = {
@@ -98,10 +99,9 @@ async function main() {
         `
     })
 
-    const turboBtn = document.getElementById('turbo-btn') as HTMLButtonElement
     turboBtn.addEventListener('click', () => {
-        currentSpeed = currentSpeed === normalSpeed ? turboSpeed : normalSpeed
-        turboBtn.style.fontWeight = currentSpeed === turboSpeed ? 'bold' : ''
+        currentSpeed = currentSpeed === standardSpeed ? standardSpeed / 2 : standardSpeed
+        turboBtn.style.fontWeight = currentSpeed !== standardSpeed ? 'bold' : ''
         clearInterval(timer)
         timer = window.setInterval(step, currentSpeed)
     })
@@ -163,6 +163,7 @@ function step() {
 }
 
 async function loadRom(romId: string) {
+    turboBtn.style.fontWeight = ''
     window.clearInterval(timer)
 
     const rom = roms[romId]
@@ -171,6 +172,8 @@ async function loadRom(romId: string) {
     exports.init()
     exports.loadProgram(new Uint8Array(romBuf))
 
+    standardSpeed = rom.options.tickrate
+    currentSpeed = standardSpeed
     timer = window.setInterval(step, currentSpeed)
 }
 
