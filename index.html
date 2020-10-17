@@ -1,0 +1,59 @@
+<html>
+  <head>
+    <style>
+      html {
+        font-family: 'Courier New', Courier, monospace;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        text-align: center;
+        color: white;
+        background-color: gray;
+      }
+      body {
+        margin-top: 10px
+      }
+      pre {
+        text-align: left;
+        white-space: pre-line;
+      }
+      select {
+        background-color: black;
+        color: white;
+        border: 0;
+        width: 350px;
+      }
+      a:link, a:visited {
+        color: rgb(255, 255, 255);
+        background-color: transparent;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      a:hover, a:active {
+        color: rgb(255, 255, 255);
+        background-color: transparent;
+        text-decoration: underline;
+      }
+      #display {
+        image-rendering: crisp-edges;
+        image-rendering: pixelated;
+      }
+      #rom-info {
+        width: 600px;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body class="container">
+    <select id="rom-selector"></select>
+    <button id="load-rom-btn">Load</button>
+    <button id="turbo-btn">Turbo</button>
+    <br /><br />
+    <canvas id="display" width="64" height="32" style="width: 512px; height: 256px"></canvas>
+    <br /><br />
+    <span id="rom-info"></span>
+
+    <script src="build/bundle.js"></script>
+  </body>
+</html>
