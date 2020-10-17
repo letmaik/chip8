@@ -18,10 +18,8 @@ jobs:
     - run: npm run build
     - run: rm -rf node_modules .gitignore
 
-    - name: Deploy to GitHub Pages
-      uses: crazy-max/ghaction-github-pages@v2
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
       with:
-        build_dir: .
-        jekyll: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
