@@ -1,6 +1,6 @@
 export const defaultRom = "chip8-test-rom"
 
-const defaultTickRate = 10
+const defaultTickRate = 7
 
 export interface Rom {
     title: string
