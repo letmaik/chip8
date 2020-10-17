@@ -88,7 +88,7 @@ async function main() {
         buzzer = new Tone.Oscillator({
 			type: "square",
 			frequency: 200,
-			volume: -20
+			volume: -25
 		}).toDestination()
 
         const romId = romSelector.value
