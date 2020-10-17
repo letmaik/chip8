@@ -152,11 +152,15 @@ function step() {
 
     if (unboundExports.isSoundOn()) {
         if (log) {
-            console.log('sound: on')
+            console.log('buzzer: on')
         }
-        buzzer.start()
+        if (buzzer.state !== "started") {
+            buzzer.start()
+        }
     } else {
-        buzzer.stop()
+        if (buzzer.state === "started") {
+            buzzer.stop()
+        }
     }
 
     // u16 return values are buggy with as-bind, using direct access here.
