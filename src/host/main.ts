@@ -1,6 +1,6 @@
 import { AsBind } from "as-bind"
 import * as Tone from 'tone'
-import { getRoms, defaultRom, Roms } from "./roms"
+import { getRoms, Roms } from "./roms"
 
 // Map key codes to CHIP-8 keys.
 // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values
@@ -58,7 +58,7 @@ async function main() {
     }
 
     const module = await AsBind.instantiate(
-        fetch("/build/untouched.wasm"), imports
+        fetch("./build/untouched.wasm"), imports
     )
 
     // Enable returning typed array views without copy.
