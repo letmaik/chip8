@@ -9,19 +9,21 @@ jobs:
   pages:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout
+      uses: actions/checkout@v2.3.1
     
     - name: Use Node.js
       uses: actions/setup-node@v1
     
     - run: npm install
     - run: npm run build
-    - run: mkdir dist && cp -r build src index.html dist && rm .gitignore
+    - run: mkdir dist && cp -r build src index.html dist && ls -al dist
 
     - name: Deploy
-      uses: peaceiris/actions-gh-pages@v3
+      uses: JamesIves/github-pages-deploy-action@3.7.1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist
-        force_orphan: true
-        exclude_assets: ''
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH: gh-pages
+        FOLDER: dist
+        CLEAN: true
+        SINGLE_COMMIT: true
