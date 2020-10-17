@@ -2,6 +2,15 @@
 
 https://letmaik.github.io/chip8/
 
+Keys:
+
+```
+1 2 3 4
+Q W E R
+A S D F
+Z X C V
+```
+
 ## CHIP-8 resources
 
 ### Docs
