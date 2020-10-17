@@ -9,11 +9,12 @@
     "build": "npm run build:untouched && npm run build:optimized",
     "build:untouched": "npm run asbuild:untouched && rollup --config",
     "build:optimized": "npm run asbuild:optimized && rollup --config",
-    "start": "cross-env SERVE=1 npm run asbuild:untouched && rollup --config --watch"
+    "start": "npm run asbuild:untouched && cross-env SERVE=1 rollup --config --watch"
   },
   "dependencies": {
     "@assemblyscript/loader": "^0.14.12",
-    "as-bind": "^0.4.1"
+    "as-bind": "^0.4.1",
+    "tone": "^14.7.58"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^14.0.0",

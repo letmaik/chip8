@@ -1,4 +1,5 @@
 import { AsBind } from "as-bind"
+import * as Tone from 'tone'
 import { getRoms, defaultRom, Roms } from "./roms"
 
 // Map key codes to CHIP-8 keys.
@@ -45,6 +46,8 @@ let log: boolean
 let canvas: HTMLCanvasElement
 let ctx: CanvasRenderingContext2D
 
+let buzzer: Tone.Oscillator
+
 const offColor = [0, 0, 0]
 const onColor = [255, 255, 255]
 
@@ -80,6 +83,14 @@ async function main() {
 
     const loadRomBtn = document.getElementById('load-rom-btn') as HTMLButtonElement
     loadRomBtn.addEventListener('click', async () => {
+        await Tone.start()
+
+        buzzer = new Tone.Oscillator({
+			type: "square",
+			frequency: 200,
+			volume: -20
+		}).toDestination()
+
         const romId = romSelector.value
         loadRom(romId)
         const rom = roms[romId]
@@ -139,8 +150,13 @@ function step() {
     }
     ctx.putImageData(imgData, 0, 0)
 
-    if (log && unboundExports.isSoundOn()) {
-        console.log('sound: on')
+    if (unboundExports.isSoundOn()) {
+        if (log) {
+            console.log('sound: on')
+        }
+        buzzer.start()
+    } else {
+        buzzer.stop()
     }
 
     // u16 return values are buggy with as-bind, using direct access here.
@@ -159,7 +175,13 @@ function step() {
         console.log('register stack', exports.getStackRegister().value)
         console.log(`instruction: ${exports.getInstructionTypeName()} ${exports.getInstructionParameters()}`)
     }
-    exports.stepCPU()
+    try {
+        exports.stepCPU()
+    } catch (e) {
+        window.clearInterval(timer)
+        window.alert(`${e}`)
+        throw e;
+    }
 }
 
 async function loadRom(romId: string) {
