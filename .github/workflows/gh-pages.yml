@@ -16,12 +16,12 @@ jobs:
     
     - run: npm install
     - run: npm run build
-    - run: rm -rf node_modules
+    - run: rm -rf node_modules .gitignore
 
     - name: Deploy to GitHub Pages
       uses: crazy-max/ghaction-github-pages@v2
       with:
-        target_branch: gh-pages
         build_dir: .
+        jekyll: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
