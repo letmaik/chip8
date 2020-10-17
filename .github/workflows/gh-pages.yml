@@ -16,10 +16,10 @@ jobs:
     
     - run: npm install
     - run: npm run build
-    - run: rm -rf node_modules .gitignore
+    - run: mkdir dist && cp -r build src index.html dist
 
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
+        publish_dir: ./dist
