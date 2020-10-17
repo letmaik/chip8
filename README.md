@@ -1,6 +1,8 @@
 # CHIP-8 emulator written in AssemblyScript
 
-## Resources
+https://letmaik.github.io/chip8/
+
+## CHIP-8 resources
 
 ### Docs
 
